@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QueueCTL Dashboard</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #1a1a1a; color: #f0f0f0; margin: 0; padding: 20px; }
+        h1, h2 { border-bottom: 1px solid #444; padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { padding: 10px; border: 1px solid #444; text-align: left; }
+        th { background: #333; }
+        /* Job State Colors */
+        .state-pending { color: #f0e68c; }
+        .state-completed { color: #90ee90; }
+        .state-failed { color: #ffa07a; } /* Light salmon for failed */
+        .state-dead { color: #f08080; } /* Light coral for dead */
+        .state-processing { color: #87ceeb; font-weight: bold; }
+        .state-null, .state-undefined { color: #aaa; }
+    </style>
+</head>
+<body>
+    <h1>QueueCTL Dashboard</h1>
+    
+    <h2>Job Summary</h2>
+    <div id="summary"></div>
+    
+    <h2>All Jobs</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>State</th>
+                <th>Attempts</th>
+                <th>Command</th>
+                <th>Last Updated</th>
+            </tr>
+        </thead>
+        <tbody id="jobs-table-body">
+            </tbody>
+    </table>
+
+    <script>
+        const jobsTableBody = document.getElementById('jobs-table-body');
+        const summaryDiv = document.getElementById('summary');
+
+        // This function formats the date safely
+        function safeFormatDate(dateStr) {
+            if (!dateStr) {
+                return 'N/A';
+            }
+            try {
+                return new Date(dateStr).toLocaleString();
+            } catch (e) {
+                return 'Invalid Date';
+            }
+        }
+
+        async function refreshData() {
+            try {
+                const response = await fetch('http://localhost:4000/api/jobs');
+                if (!response.ok) {
+                    throw new Error(`Network response was not ok: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data || !data.summary || !data.jobs) {
+                    throw new Error("Invalid data structure from API");
+                }
+
+                // 1. Update the Summary
+                summaryDiv.innerHTML = '';
+                data.summary.forEach(item => {
+                    summaryDiv.innerHTML += `
+                        <p><strong>${item.state || 'unknown'}:</strong> ${item.count}</p>
+                    `;
+                });
+                if (data.summary.length === 0) {
+                    summaryDiv.innerHTML = '<p>No jobs found.</p>';
+                }
+
+                // 2. Update the Jobs Table
+                jobsTableBody.innerHTML = '';
+                data.jobs.forEach(job => {
+                    const state = job.state || 'null';
+                    const command = job.command || 'N/A';
+                    
+                    jobsTableBody.innerHTML += `
+                        <tr>
+                            <td>${job.id}</td>
+                            <td class="state-${state}">${state}</td>
+                            <td>${job.attempts}</td>
+                            <td>${command}</td>
+                            <td>${safeFormatDate(job.updated_at)}</td>
+                        </tr>
+                    `;
+                });
+                if (data.jobs.length === 0) {
+                     jobsTableBody.innerHTML = '<tr><td colspan="5">No jobs in queue.</td></tr>';
+                }
+
+            } catch (err) {
+                // This will show the error on the page instead of just "Error loading data"
+                console.error('Failed to fetch or render data:', err);
+                jobsTableBody.innerHTML = `<tr><td colspan="5">Error loading data: ${err.message}</td></tr>`;
+                summaryDiv.innerHTML = `<p>Error loading data: ${err.message}</p>`;
+            }
+        }
+
+        // Fetch data every 2 seconds
+        setInterval(refreshData, 2000);
+        
+        // Fetch data immediately on page load
+        refreshData();
+    </script>
+</body>
+</html>
