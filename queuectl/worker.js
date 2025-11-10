@@ -44,9 +44,8 @@ async function runWorker() {
   parentPort.close();
 }
 
-/**
- * Tries to find a pending job and lock it for processing.
- */
+// Tries to find a pending job and lock it for processing.
+
 async function pollAndLockJob() {
   const now = new Date().toISOString();
   const tenSecondsAgo = new Date(Date.now() - 10000).toISOString(); 
@@ -72,8 +71,7 @@ async function pollAndLockJob() {
         console.warn(`[${workerId}] Rescuing stale job: ${job.id} (was locked by ${job.locked_by})`);
       }
 
-      // --- THIS IS THE CHANGE ---
-      // We now set 'started_at' *when the job is locked*.
+      //set 'started_at' - when the job is locked.
       await db.run(
         `UPDATE jobs
          SET
@@ -83,11 +81,10 @@ async function pollAndLockJob() {
            updated_at = ?,
            started_at = ?  -- <-- ADDED THIS
          WHERE id = ?`,
-        [workerId, now, now, now, job.id] // <-- ADDED 'now'
+        [workerId, now, now, now, job.id]
       );
       await db.run('COMMIT;');
       
-      // We need to return started_at as well
       return { ...job, state: 'processing', locked_by: workerId, started_at: now };
     } else {
       await db.run('COMMIT;');
@@ -107,12 +104,8 @@ async function pollAndLockJob() {
   }
 }
 
-/**
- * Executes the job command and handles success or failure.
- */
-/**
- * Executes the job command and handles success or failure.
- */
+// Executes the job command and handles success or failure.
+
 async function executeJob(job) {
   const currentAttempt = job.attempts + 1;
 
@@ -120,13 +113,13 @@ async function executeJob(job) {
   console.log(`[${workerId}]   -> Command: ${job.command}`);
   
   try {
-    // 1. Execute the command
+    //Execute the command
     const { stdout, stderr } = await exec(job.command, { timeout: 30000 }); 
 
     const out = stdout ? stdout.trim() : '';
     const err = stderr ? stderr.trim() : '';
     
-    // This is the new, fixed code:
+    
 console.log(`[${workerId}]   -> Status: SUCCESS`);
 if (out) console.log(`[${workerId}]   -> stdout: ${out}`);
 if (err) console.warn(`[${workerId}]   -> stderr: ${err}`);
@@ -134,11 +127,11 @@ if (err) console.warn(`[${workerId}]   -> stderr: ${err}`);
 await setJobState(job.id, 'completed', { 
   stdout: out, 
   stderr: err,
-  attempts: currentAttempt // <-- THIS IS THE FIX
+  attempts: currentAttempt
 });
 
   } catch (err) {
-    // 3. On failure
+    // On failure
     const out = err.stdout ? err.stdout.trim() : '';
     const errText = err.stderr ? err.stderr.trim() : err.message;
 
@@ -150,8 +143,6 @@ await setJobState(job.id, 'completed', {
 
     if (newAttempts >= job.max_retries) {
       console.error(`[${workerId}]   -> ACTION: Moving to DLQ (Max retries reached).`);
-      
-      // --- THIS IS THE CHANGE ---
       // Save output on move to DLQ
       await setJobState(job.id, 'dead', { 
         attempts: newAttempts,
@@ -160,14 +151,13 @@ await setJobState(job.id, 'completed', {
       });
 
     } else {
-      // Retry
+      
       const { value: base } = await db.get("SELECT value FROM config WHERE key = 'backoff_base'");
       const delayInSeconds = Math.pow(parseInt(base, 10), newAttempts);
       const newRunAt = new Date(Date.now() + delayInSeconds * 1000).toISOString();
 
       console.warn(`[${workerId}]   -> ACTION: Retrying. Next run at ${newRunAt}`);
-      
-      // --- THIS IS THE CHANGE ---
+
       // Save output on retry
       await setJobState(job.id, 'failed', {
         attempts: newAttempts,
@@ -180,9 +170,9 @@ await setJobState(job.id, 'completed', {
     console.log(`[${workerId}] --- FINISHED Job: ${job.id} ---`);
   }
 }
-/**
- * Helper to update a job's state and release its lock.
- */
+
+ // Helper to update a job's state and release its lock.
+
 async function setJobState(id, state, overrides = {}) {
   const now = new Date().toISOString();
   
@@ -194,7 +184,6 @@ async function setJobState(id, state, overrides = {}) {
     ...overrides,
   };
 
-  // --- THIS IS THE CHANGE ---
   // If the job is 'completed' or 'dead', set its completion time.
   if (state === 'completed' || state === 'dead') {
     fields.completed_at = now;
@@ -208,6 +197,5 @@ async function setJobState(id, state, overrides = {}) {
     [...values, id]
   );
 }
-
 // Start the worker
 runWorker().catch(err => console.error(`[${workerId}] Fatal error:`, err));

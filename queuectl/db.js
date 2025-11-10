@@ -1,15 +1,15 @@
 import { open } from 'sqlite';
 import sqlite3 from 'sqlite3';
 
-// This is the heart of your persistence.
+
 const DB_FILE = './queue.db';
 
 let db = null;
 
-/**
- * Opens a connection to the SQLite database.
- * If the database/tables don't exist, it creates them.
- */
+
+//  * Opens a connection to the SQLite database.
+//  * If the database/tables don't exist, it creates them.
+
 export async function initDb() {
   if (db) {
     return db;
@@ -21,10 +21,9 @@ export async function initDb() {
       driver: sqlite3.Database,
     });
 
-    // These SQL commands are the "schema" for your system.
+    // "schema" SQL Command.
     // The "locked_by" and "run_at" fields are CRITICAL for
-    // the worker and backoff logic.
-    // ... in db.js
+
     await db.exec(`
       CREATE TABLE IF NOT EXISTS jobs (
         id TEXT PRIMARY KEY,
@@ -32,11 +31,11 @@ export async function initDb() {
         state TEXT NOT NULL DEFAULT 'pending',
         attempts INTEGER NOT NULL DEFAULT 0,
         max_retries INTEGER NOT NULL DEFAULT 3,
+        
         priority INTEGER NOT NULL DEFAULT 0,
         stdout TEXT,
         stderr TEXT,
 
-        -- THESE ARE THE NEW COLUMNS --
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         started_at DATETIME,
         completed_at DATETIME,

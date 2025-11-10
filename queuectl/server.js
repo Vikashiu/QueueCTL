@@ -1,12 +1,6 @@
 import express from 'express';
 import { initDb, getDb } from './db.js';
 import cors from 'cors';
-// import path from 'path';
-// import { fileURLToPath } from 'url';
-
-// // __dirname replacement in ES modules
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 4000;
@@ -16,10 +10,9 @@ console.log('[Server] Initializing database...');
 await initDb();
 console.log('[Server] Database initialized.');
 
-// 2. Set up middleware to serve static files from a 'public' folder
-// app.use(express.static(path.join(__dirname, 'public')));
 
-// 3. Define the API endpoint
+
+// 2. Define the API endpoint
 
 app.use(cors());
 app.get('/api/jobs', async (req, res) => {
@@ -49,8 +42,7 @@ app.get('/api/jobs', async (req, res) => {
   }
 });
 
-// 4. Start the server
+// 3. Start the server
 app.listen(PORT, () => {
-  console.log(`[OK] Dashboard server running at http://localhost:${PORT}`);
-  console.log('Open http://localhost:4000 in your browser.');
+  console.log(`Dashboard server running at http://localhost:${PORT}`);
 });

@@ -19,13 +19,11 @@ const activeWorkers = [];
 async function main() {
   // Initialize DB first
   await initDb(); 
-  // We get the db instance *inside* each command handler
-  // to ensure it's available after initialization.
 
   yargs(hideBin(process.argv))
-    // --------------------------------------------------
+    
     // 1. Enqueue Command (with Priority and Delay)
-    // --------------------------------------------------
+    
     .command(
       'enqueue',
       'Add a new job to the queue',
@@ -40,11 +38,10 @@ async function main() {
             default: 0
           })
           
-          // --- THIS IS THE NEW OPTION ---
           .option('delay', {
             describe: 'Delay job execution by N seconds',
             type: 'number',
-            default: 0 // Default to 0 seconds (run immediately)
+            default: 0 
           });
       },
       async (argv) => {
@@ -53,8 +50,6 @@ async function main() {
           const jobData = { id: argv.id, command: argv.command };
           const { value: default_max_retries } = await db.get("SELECT value FROM config WHERE key = 'max_retries'");
           
-          // --- THIS IS THE NEW LOGIC ---
-          // Calculate the run_at time based on the delay
           const runAtTime = new Date(Date.now() + (argv.delay * 1000)).toISOString();
 
           const job = {
@@ -65,7 +60,7 @@ async function main() {
             priority: argv.priority,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            run_at: runAtTime, // <-- Use the calculated time
+            run_at: runAtTime,
           };
 
           await db.run(
@@ -90,9 +85,9 @@ async function main() {
         }
       }
     )
-    // --------------------------------------------------
+    
     // 2. Worker Command Group
-    // --------------------------------------------------
+  
     .command(
       'worker <action>',
       'Manage worker processes',
@@ -118,7 +113,7 @@ async function main() {
                 worker.on('error', (err) => console.error(`Worker ${worker.threadId} error:`, err));
               }
               console.log(`${argv.count} worker(s) started.`);
-              setInterval(() => {}, 1 << 30); // Keep alive
+              setInterval(() => {}, 1 << 30);
             }
           )
           .command(
@@ -133,14 +128,14 @@ async function main() {
           );
       }
     )
-    // --------------------------------------------------
+    
     // 3. Status Command
-    // --------------------------------------------------
+    
     .command(
       'status',
       'Show summary of all job states',
       async () => {
-        const db = getDb(); // Get DB instance
+        const db = getDb();
         try {
           const results = await db.all("SELECT state, COUNT(*) as count FROM jobs GROUP BY state");
           console.log('Job Status Summary:');
@@ -150,12 +145,9 @@ async function main() {
         }
       }
     )
-    // --------------------------------------------------
+    
     // 4. List Command
-    // --------------------------------------------------
-    // --------------------------------------------------
-    // 4. List Command (Improved to show created_at)
-    // --------------------------------------------------
+    
     .command(
       'list',
       'List jobs. By default, lists ALL jobs. Use --state to filter.',
@@ -190,7 +182,7 @@ async function main() {
             return;
           }
 
-          // --- THIS IS THE NEW "PRETTY" TABLE LOGIC ---
+          
           const table = new Table({
             head: [
               chalk.cyan('ID'),
@@ -199,11 +191,11 @@ async function main() {
               chalk.cyan('Command'),
               chalk.cyan('Updated At')
             ],
-            colWidths: [20, 15, 10, 40, 30], // Adjust widths as needed
+            colWidths: [20, 15, 10, 40, 30],
             wordWrap: true, // Wrap long commands
           });
 
-          // Helper function to color-code the state
+          //function to color-code the state
           const colorState = (state) => {
             switch (state) {
               case 'pending':
@@ -232,16 +224,16 @@ async function main() {
           });
 
           console.log(table.toString());
-          // --- END OF NEW TABLE LOGIC ---
+          
 
         } catch (err) {
           console.error(`[Error] ${err.message}`);
         }
       }
     )
-    // --------------------------------------------------
+    
     // 5. DLQ Command Group
-    // --------------------------------------------------
+    
     .command(
       'dlq <action> [jobId]',
       'Manage the Dead Letter Queue',
@@ -251,7 +243,7 @@ async function main() {
             'list',
             'List all jobs in the DLQ',
             async () => {
-              const db = getDb(); // Get DB instance
+              const db = getDb();
               try {
                 const rows = await db.all(
                   "SELECT id, command, state, attempts, updated_at FROM jobs WHERE state = 'dead' ORDER BY updated_at DESC"
@@ -277,7 +269,7 @@ async function main() {
               });
             },
             async (argv) => {
-              const db = getDb(); // Get DB instance
+              const db = getDb();
               try {
                 const result = await db.run(
                   `UPDATE jobs
@@ -302,9 +294,9 @@ async function main() {
           );
       }
     )
-    // --------------------------------------------------
-    // 6. Config Command Group (THE FIXED VERSION)
-    // --------------------------------------------------
+
+    // 6. Config Command Group
+
     .command(
       'config <action>', // Define the group
       'Manage configuration',
@@ -313,9 +305,9 @@ async function main() {
         yargs.command(
           'list', // The action
           'List all config values',
-          () => {}, // Empty builder
-          async () => { // Handler for list
-            const db = getDb(); // Get the DB *inside* the handler
+          () => {}, 
+          async () => {
+            const db = getDb(); 
             try {
               const results = await db.all("SELECT * FROM config");
               console.table(results);
@@ -334,7 +326,7 @@ async function main() {
               .positional('value', { type: 'string', describe: 'The new value' });
           },
           async (argv) => { // Handler for set
-            const db = getDb(); // Get the DB *inside* the handler
+            const db = getDb(); 
             try {
               const result = await db.run(
                 'UPDATE config SET value = ? WHERE key = ?',
@@ -352,11 +344,11 @@ async function main() {
         );
       }
     )
-    // --------------------------------------------------
+    
     // 7. Log Command (NEW)
-    // --------------------------------------------------
+    
     .command(
-      'log <jobId>', // The command is 'log'
+      'log <jobId>', 
       'View the saved stdout/stderr for a job',
       (yargs) => { // Builder
         return yargs
@@ -388,9 +380,7 @@ async function main() {
         }
       }
     )
-    // --------------------------------------------------
     // 8. Stats Command (NEW)
-    // --------------------------------------------------
     .command(
       'stats',
       'Show execution stats and metrics',
@@ -398,8 +388,7 @@ async function main() {
         const db = getDb();
         try {
           console.log(chalk.cyan.bold('\n--- QueueCTL Metrics ---'));
-
-          // 1. Get Job Counts
+          // Job Counts
           const counts = await db.all("SELECT state, COUNT(*) as count FROM jobs GROUP BY state");
           console.log(chalk.cyan('\nJob Counts:'));
           if (counts.length === 0) {
@@ -410,8 +399,8 @@ async function main() {
             });
           }
 
-          // 2. Get Avg Execution Time
-          // We use julianday to calculate the difference in seconds
+          // Get Avg Execution Time
+          // used julianday to calculate the difference in seconds
           const result = await db.get(
             `SELECT AVG(julianday(completed_at) - julianday(started_at)) * 86400.0 as avg_time
              FROM jobs 
@@ -430,7 +419,6 @@ async function main() {
         }
       }
     )
-    // --------------------------------------------------
     
     .demandCommand(1, 'You must provide a command.\nRun --help to see all commands.')
     .help()
