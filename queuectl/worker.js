@@ -1,6 +1,7 @@
 import { parentPort, isMainThread, threadId } from 'worker_threads';
 import { initDb, getDb } from './db.js';
 import { sleep, exec } from './utils.js';
+import fs from 'fs';
 
 if (isMainThread) {
   throw new Error('This file must be run as a worker thread.');
@@ -14,14 +15,16 @@ async function runWorker() {
   console.log(`[${workerId}] Starting...`);
   db = await initDb();
 
-  parentPort.on('message', (msg) => {
-    if (msg === 'stop') {
-      console.log(`[${workerId}] Received stop signal. Shutting down gracefully...`);
-      isRunning = false;
-    }
-  });
+  
 
   while (isRunning) {
+    // On each loop, check if the stop file exists.
+    if (fs.existsSync('.stopfile')) {
+      console.log(`[${workerId}] Stop file detected. Shutting down gracefully...`);
+      isRunning = false;
+      continue; // Skip to the end of the loop
+    }
+
     let job = null;
     try {
       job = await pollAndLockJob();
@@ -41,6 +44,7 @@ async function runWorker() {
   }
 
   console.log(`[${workerId}] Exited.`);
+  // As a final step, the *last* worker to exit should clean up the file.
   parentPort.close();
 }
 
@@ -80,7 +84,8 @@ async function pollAndLockJob() {
            locked_at = ?,
            updated_at = ?,
            started_at = ?  -- <-- ADDED THIS
-         WHERE id = ?`,
+         WHERE id = ?
+         `,
         [workerId, now, now, now, job.id]
       );
       await db.run('COMMIT;');

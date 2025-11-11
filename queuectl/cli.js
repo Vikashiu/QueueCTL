@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-
+import fs from 'fs';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { initDb, getDb } from './db.js';
@@ -21,7 +21,7 @@ async function main() {
   await initDb(); 
 
   yargs(hideBin(process.argv))
-    
+    .scriptName("queuectl")
     // 1. Enqueue Command (with Priority and Delay)
     
     .command(
@@ -71,9 +71,9 @@ async function main() {
           );
           
           if (argv.delay > 0) {
-            console.log(`[OK] Job enqueued: ${job.id} (priority: ${job.priority}). Will run after ${argv.delay} seconds.`);
+            console.log(`Job enqueued: ${job.id} (priority: ${job.priority}). Will run after ${argv.delay} seconds.`);
           } else {
-            console.log(`[OK] Job enqueued: ${job.id} (priority: ${job.priority}).`);
+            console.log(`Job enqueued: ${job.id} (priority: ${job.priority}).`);
           }
 
         } catch (err) {
@@ -105,25 +105,37 @@ async function main() {
               });
             },
             (argv) => {
+              // On start, make sure the .stopfile doesn't exist
+              try {
+                if (fs.existsSync('.stopfile')) {
+                  fs.unlinkSync('.stopfile');
+                }
+              } catch (err) {
+                console.error('Failed to remove old .stopfile');
+              }
+              
               console.log(`Starting ${argv.count} worker(s)...`);
               for (let i = 0; i < argv.count; i++) {
                 const worker = new Worker(path.resolve(__dirname, 'worker.js'));
-                activeWorkers.push(worker);
+                // We no longer need to track activeWorkers
                 worker.on('exit', () => console.log(`Worker ${worker.threadId} exited.`));
                 worker.on('error', (err) => console.error(`Worker ${worker.threadId} error:`, err));
               }
               console.log(`${argv.count} worker(s) started.`);
-              setInterval(() => {}, 1 << 30);
+              setInterval(() => {}, 1 << 30); // Keep alive
             }
           )
           .command(
             'stop',
-            'Stop running workers gracefully (Not implemented)',
+            'Stop all running workers gracefully',
             () => {
-              console.log('Sending stop signal to workers...');
-              activeWorkers.forEach(worker => worker.postMessage('stop'));
-              console.log("Stop signal sent. Workers will exit after their current job.");
-              setTimeout(() => process.exit(0), 2000);
+              // NEW STOP LOGIC: Create the .stopfile
+              try {
+                fs.writeFileSync('.stopfile', 'stop');
+                console.log('Stop signal file created. Workers will shut down gracefully...');
+              } catch (err) {
+                console.error('Error creating stop file:', err);
+              }
             }
           );
       }
@@ -283,9 +295,9 @@ async function main() {
                   argv.jobId
                 );
                 if (result.changes === 0) {
-                  console.log(`[Warning] No job found in DLQ with ID: ${argv.jobId}`);
+                  console.log(`Warning - No job found in DLQ with ID: ${argv.jobId}`);
                 } else {
-                  console.log(`[OK] Job ${argv.jobId} moved back to queue for retry.`);
+                  console.log(`Job ${argv.jobId} moved back to queue for retry.`);
                 }
               } catch (err) {
                 console.error(`[Error] ${err.message}`);
